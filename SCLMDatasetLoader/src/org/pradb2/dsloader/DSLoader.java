@@ -216,7 +216,6 @@ public class DSLoader {
 					checkInputFields();
 				}
 				catch (DSLoaderException exception) {
-//					throw (new DSLoaderException(exception.getMessage() + "\n"));
 					txtProgressLog.setText(exception.getMessage() + "\n");
 					return;
 				}
