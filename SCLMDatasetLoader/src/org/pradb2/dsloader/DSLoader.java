@@ -276,10 +276,8 @@ public class DSLoader {
 								  DSLoaderFTPClient ftpClient,
 								  List<String> orderedSclmLevels) throws DSLoaderException, Exception {
 		
-		
 		for (String level : orderedSclmLevels) {
 			File localFile;
-			
 			ftpClient.changeDirectory("'" + level + "'");
 			
 			if (!wknMembers.isEmpty()) {
@@ -288,27 +286,38 @@ public class DSLoader {
 					ftpClient.download(member, localFile);
 					txtProgressLog.append(String.format("Pulling dataset %s(%s)..\n", level, member));
 				}
+				wknMembers.clear(); //TODO: refactor! this is ugly.
+				continue;
 			}
+			
 			if (!wrkMembers.isEmpty()) {
 				for (String member : wrkMembers) {
 					localFile = new File (LOCAL_DIR + "\\" + member + "." + TYPE);
 					ftpClient.download(member, localFile);
 					txtProgressLog.append(String.format("Pulling dataset %s(%s)..\n", level, member));
 				}
+				wrkMembers.clear(); //TODO: refactor! this is ugly.
+				continue;
 			}
+			
 			if (!hldMembers.isEmpty()) {
 				for (String member : hldMembers) {
 					localFile = new File (LOCAL_DIR + "\\" + member + "." + TYPE);
 					ftpClient.download(member, localFile);
 					txtProgressLog.append(String.format("Pulling dataset %s(%s)..\n", level, member));
 				}
+				hldMembers.clear(); //TODO: refactor! this is ugly.
+				continue;
 			}
+			
 			if (!prdMembers.isEmpty()) {
 				for (String member : prdMembers) {
 					localFile = new File (LOCAL_DIR + "\\" + member + "." + TYPE);
 					ftpClient.download(member, localFile);
 					txtProgressLog.append(String.format("Pulling dataset %s(%s)..\n", level, member));
 				}
+				prdMembers.clear(); //TODO: refactor! this is ugly.
+				continue;
 			}
 		}
 		
