@@ -142,7 +142,7 @@ public class DSLoader {
 		
 		txtProgressLog = new Text(shell, SWT.MULTI | SWT.BORDER | SWT.WRAP | SWT.V_SCROLL);
 		txtProgressLog.setEditable(false);
-		txtProgressLog.setEnabled(false);
+		txtProgressLog.setEnabled(true);
 		txtProgressLog.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true, 4, 1));
 		
 		btnPull = new Button(shell, SWT.NONE);
@@ -212,15 +212,16 @@ public class DSLoader {
 		else if (splitSclmLevel[2] != TYPE) {
 				throw new DSLoaderException ("Value of Type field doesn't match with type in SCLM level\n");
 		}
-		
-		orderedSclmLevels = orderUp (splitSclmLevel[0], splitSclmLevel[1]);
-				
+		else{
+			orderedSclmLevels = orderUp (splitSclmLevel[0], splitSclmLevel[1]);
+		}		
 		return orderedSclmLevels;
 	}
 	
 	private void fillMembers (DSLoaderFTPClient ftpClient, List<String> members, 
 							  String level, String pattern,
-							  Set<String> memberCheck) throws Exception {
+							  Set<String> memberCheck,
+							  List<String> orderedSclmLevels) throws Exception {
 		String[] memberList = null;
 		
 		ftpClient.changeDirectory("'" + level + "'");
@@ -242,6 +243,10 @@ public class DSLoader {
 				}
 			}
 		}
+		else {
+			int index = orderedSclmLevels.indexOf(level);
+			orderedSclmLevels.set(index, "DELETE");
+		}
 	}
 	
 	private void fillMemberLists (String pattern,
@@ -252,21 +257,27 @@ public class DSLoader {
 								  DSLoaderFTPClient ftpClient,
 								  List<String> orderedSclmLevels) throws Exception {
 		Set<String> memberCheck = new HashSet<String>();
+		boolean hasMore;
 		
 		for (String level : orderedSclmLevels) {
 			if (level.matches(".*WK.999S.*")) {
-				fillMembers (ftpClient, wknMembers, level, pattern, memberCheck);
+				fillMembers (ftpClient, wknMembers, level, pattern, memberCheck, orderedSclmLevels);
 			}
 			if (level.matches (".*WRK999S.*")) {
-				fillMembers (ftpClient, wrkMembers, level, pattern, memberCheck);
+				fillMembers (ftpClient, wrkMembers, level, pattern, memberCheck, orderedSclmLevels);
 			}
 			if (level.matches(".*HLD999S.*")) {
-				fillMembers (ftpClient, hldMembers, level, pattern, memberCheck);
+				fillMembers (ftpClient, hldMembers, level, pattern, memberCheck, orderedSclmLevels);
 			}
 			if (level.matches(".*PRD999S.*")) {
-				fillMembers (ftpClient, prdMembers, level, pattern, memberCheck);
-			}
+				fillMembers (ftpClient, prdMembers, level, pattern, memberCheck, orderedSclmLevels);
+			}			
 		}
+		do {
+			hasMore=orderedSclmLevels.remove("DELETE");
+		}
+		while (hasMore);
+			
 	}
 	
 	private void downloadMembers (List<String> wknMembers, 
