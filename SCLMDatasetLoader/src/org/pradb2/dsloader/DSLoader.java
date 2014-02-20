@@ -161,30 +161,34 @@ public class DSLoader {
 
 	}
 	
-	private void pullData (DSLoaderFTPClient ftpClient) throws DSLoaderException  {
+	private void pullData (DSLoaderFTPClient ftpClient)   {
 		String fullFilePath = txtSaveTo.getText() + "\\" + txtMember.getText() + "." + txtType.getText(); 
 		File localFile = new File (fullFilePath);
 		
 		try {
-			ftpClient.changeDirectory(txtSclmLevel.getText());
+			ftpClient.changeDirectory("'" + txtSclmLevel.getText() + "'");
 		}
 		catch (FTPException e) {
+			e.printStackTrace(System.out);
 			txtProgressLog.append("changeDirectory FTPexception: " + e.getMessage() + "\n");
 			return;
 		}
 		catch (Exception e) {
+			e.printStackTrace(System.out);
 			txtProgressLog.append("changeDirectory Exception: " + e.getMessage() + "\n");
 			return;
 		}
 		
 		try {
-			ftpClient.download(fullFilePath, localFile);
+			ftpClient.download(txtMember.getText(), localFile);
 		}
 		catch (FTPException e) {
+			e.printStackTrace(System.out);
 			txtProgressLog.append("Download FTPexception: " + e.getMessage() + "\n");
 			return;
 		}
 		catch (Exception e) {
+			e.printStackTrace(System.out);
 			txtProgressLog.append("Download Exception: " + e.getMessage() + "\n");
 			return;
 		}
@@ -222,15 +226,18 @@ public class DSLoader {
 				
 				DSLoaderFTPClient ftpClient = new DSLoaderFTPClient();
 				
+				ftpClient.setType(DSLoaderFTPClient.TYPE_TEXTUAL);	
 				try {
 					ftpClient.connect(SERVER);
 					ftpClient.login(txtUsername.getText(), txtPassword.getText());
 				}
 				catch (FTPException e) {
+					e.printStackTrace(System.out);
 					txtProgressLog.append("FTP exception: " + e.getMessage() + "\n");
 					return;
 				}
 				catch (Exception e) {
+					e.printStackTrace(System.out);
 					txtProgressLog.append(e.getStackTrace().toString() + "\n");
 					return;
 				}
@@ -238,21 +245,13 @@ public class DSLoader {
 				//No exception was thrown while connecting
 				txtProgressLog.append("Connection successfull..\n");
 				
-				try {
-					pullData (ftpClient);
-				}
-				catch (DSLoaderException e) {
-					txtProgressLog.append(e.getMessage());
-					return;
-				}
-				finally {
-					if (ftpClient.isConnected()){
-						try {
-							ftpClient.disconnect(true);
-						}
-						catch (Exception e) {
-							txtProgressLog.append("Exception while disconnecting: " + e.getMessage() + "\n");
-						}
+				pullData (ftpClient);
+				if (ftpClient.isConnected()){
+					try {
+						ftpClient.disconnect(true);
+					}
+					catch (Exception e) {
+						txtProgressLog.append("Exception while disconnecting: " + e.getMessage() + "\n");
 					}
 				}
 				
