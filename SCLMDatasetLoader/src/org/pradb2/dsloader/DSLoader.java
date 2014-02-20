@@ -1,8 +1,13 @@
 package org.pradb2.dsloader;
 
 import it.sauronsoftware.ftp4j.FTPException;
+import it.sauronsoftware.ftp4j.FTPListParseException;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import org.eclipse.swt.widgets.DirectoryDialog;
@@ -18,6 +23,19 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Button;
 import org.pradb2.exceptions.DSLoaderException;
 import org.eclipse.swt.widgets.Composite;
+
+enum SclmLevel {
+	WK1999S,
+	WK2999S,
+	WK3999S,
+	WK4999S,
+	WK5999S,
+	WK6999S,
+	WK7999S,
+	WRK999S,
+	HLD999S,
+	PRD999S
+}
 
 public class DSLoader {
 	private static Logger LOGGER = Logger.getLogger("Global Logger"); 
@@ -40,23 +58,16 @@ public class DSLoader {
 	private Composite composite;
 	final private String SERVER = "usilca31.ca.com";
 	
+	private String SCLM_LEVEL;
+	private String MEMBER;
+	private String TYPE;
+	private String LOCAL_DIR;
+	
+	
 	
 	public DSLoader() {
 		display = new Display();
 		shell = new Shell(display);
-	}
-	
-	public void run () {
-//		shell.pack(); //Causes the receiver to be resized to its preferred size. 
-		shell.open();
-
-		while (!shell.isDisposed()) {
-			if (!display.readAndDispatch()) {
-				display.sleep();
-			}
-		}
-		display.dispose();
-		shell.dispose();
 	}
 	
 	private void setUpShell() {
@@ -142,59 +153,209 @@ public class DSLoader {
 	}
 
 	private void checkInputFields() throws DSLoaderException {
-		if (txtSclmLevel.getText() == "") { 
+		if ( (SCLM_LEVEL=txtSclmLevel.getText()) == "") { 
 			throw (new DSLoaderException("Empty SCLM level"));
 		}
 		
-		if (txtType.getText() == "") { 
+		if ( (TYPE = txtType.getText()) == "") { 
 			throw (new DSLoaderException("Empty member"));
 		}
 
-		if (txtMember.getText() == "") { 
+		if ( (MEMBER = txtMember.getText()) == "") { 
 			throw (new DSLoaderException("Empty type name"));
 		}
 		
-		File dir = new File(txtSaveTo.getText());
-		if (txtSaveTo.getText() == "" && !dir.isDirectory()) { 
+		LOCAL_DIR = txtSaveTo.getText();
+		File dir = new File(LOCAL_DIR);
+		if (LOCAL_DIR == "" && !dir.isDirectory()) { 
 			throw (new DSLoaderException("Directory is not specified correctly\n"));
 		}
-
+		
+	}
+	
+	List<String> orderUp (String product, String level) {
+		List<String> levels = new ArrayList<String> ();
+		
+		if (level.startsWith("WK")) {
+			levels.add(product + "." + level + "." + TYPE);
+			levels.add(product + "." + SclmLevel.WRK999S.name() + "." + TYPE);
+			levels.add(product + "." + SclmLevel.HLD999S.name() + "."+ TYPE);
+			levels.add(product + "." + SclmLevel.PRD999S.name() + "."+ TYPE);
+		}
+		else if (level.startsWith("WRK")) {
+			levels.add(product + "." + level + "." + TYPE);
+			levels.add(product + "." + SclmLevel.HLD999S.name() + "."+ TYPE);
+			levels.add(product + "." + SclmLevel.PRD999S.name() + "."+ TYPE);
+		}
+		else if (level.startsWith("HLD")) {
+			levels.add(product + "." + level + "." + TYPE);
+			levels.add(product + "." + SclmLevel.PRD999S.name() + "."+ TYPE);
+		}
+		else {
+			levels.add(product + "." + level + "." + TYPE);
+		}
+		return levels;
+	}
+	
+	List<String> getOrderedSclmLevels () throws DSLoaderException {
+//		neatUp(txtSclmLevel.getText());
+		String[] splitSclmLevel = SCLM_LEVEL.split("\\.");
+		List<String> orderedSclmLevels = new ArrayList<String>();
+		
+		if (splitSclmLevel.length == 1){
+			
+			orderedSclmLevels = orderUp ("PRA", splitSclmLevel[0]);
+		}
+		else if (splitSclmLevel.length == 2) {
+			orderedSclmLevels = orderUp (splitSclmLevel[0], splitSclmLevel[1]);
+		}
+		else if (splitSclmLevel[2] != TYPE) {
+				throw new DSLoaderException ("Value of Type field doesn't match with type in SCLM level\n");
+		}
+		
+		orderedSclmLevels = orderUp (splitSclmLevel[0], splitSclmLevel[1]);
+				
+		return orderedSclmLevels;
+	}
+	
+	private void fillMembers (DSLoaderFTPClient ftpClient, List<String> members, 
+							  String level, String pattern,
+							  Set<String> memberCheck) throws Exception {
+		String[] memberList = null;
+		
+		ftpClient.changeDirectory("'" + level + "'");
+		try {
+			memberList = ftpClient.listNames();
+		}
+		catch ( Exception e ) {
+			e.printStackTrace(System.out);
+			System.out.println(e.getMessage());
+			System.out.println(e.getCause());
+		}
+		if (memberList != null) {
+			for (String member : memberList) {
+				if (!memberCheck.contains(member)) {
+					if (member.matches(pattern)) {
+						members.add(member);
+						memberCheck.add(member);
+					}
+				}
+			}
+		}
+	}
+	
+	private void fillMemberLists (String pattern,
+								  List<String> wknMembers, 
+								  List<String> wrkMembers,
+								  List<String> hldMembers,
+								  List<String> prdMembers,
+								  DSLoaderFTPClient ftpClient,
+								  List<String> orderedSclmLevels) throws Exception {
+		Set<String> memberCheck = new HashSet<String>();
+		
+		for (String level : orderedSclmLevels) {
+			if (level.matches(".*WK.999S.*")) {
+				fillMembers (ftpClient, wknMembers, level, pattern, memberCheck);
+			}
+			if (level.matches (".*WRK999S.*")) {
+				fillMembers (ftpClient, wrkMembers, level, pattern, memberCheck);
+			}
+			if (level.matches(".*HLD999S.*")) {
+				fillMembers (ftpClient, hldMembers, level, pattern, memberCheck);
+			}
+			if (level.matches(".*PRD999S.*")) {
+				fillMembers (ftpClient, prdMembers, level, pattern, memberCheck);
+			}
+		}
+	}
+	
+	private void downloadMembers (List<String> wknMembers, 
+								  List<String> wrkMembers,
+								  List<String> hldMembers,
+								  List<String> prdMembers,
+								  DSLoaderFTPClient ftpClient,
+								  List<String> orderedSclmLevels) throws DSLoaderException, Exception {
+		
+		
+		for (String level : orderedSclmLevels) {
+			File localFile;
+			
+			ftpClient.changeDirectory("'" + level + "'");
+			
+			if (!wknMembers.isEmpty()) {
+				for (String member : wknMembers) {
+					localFile = new File (LOCAL_DIR + "\\" + member + "." + TYPE);
+					ftpClient.download(member, localFile);
+					txtProgressLog.append(String.format("Pulling dataset %s(%s)..\n", level, member));
+				}
+			}
+			if (!wrkMembers.isEmpty()) {
+				for (String member : wrkMembers) {
+					localFile = new File (LOCAL_DIR + "\\" + member + "." + TYPE);
+					ftpClient.download(member, localFile);
+					txtProgressLog.append(String.format("Pulling dataset %s(%s)..\n", level, member));
+				}
+			}
+			if (!hldMembers.isEmpty()) {
+				for (String member : hldMembers) {
+					localFile = new File (LOCAL_DIR + "\\" + member + "." + TYPE);
+					ftpClient.download(member, localFile);
+					txtProgressLog.append(String.format("Pulling dataset %s(%s)..\n", level, member));
+				}
+			}
+			if (!prdMembers.isEmpty()) {
+				for (String member : prdMembers) {
+					localFile = new File (LOCAL_DIR + "\\" + member + "." + TYPE);
+					ftpClient.download(member, localFile);
+					txtProgressLog.append(String.format("Pulling dataset %s(%s)..\n", level, member));
+				}
+			}
+		}
+		
 	}
 	
 	private void pullData (DSLoaderFTPClient ftpClient)   {
-		String fullFilePath = txtSaveTo.getText() + "\\" + txtMember.getText() + "." + txtType.getText(); 
-		File localFile = new File (fullFilePath);
+		//defining regex pattern
+		String pattern = MEMBER.replace("*", ".*");
+		List<String> wknMembers = new ArrayList<String>();
+		List<String> wrkMembers = new ArrayList<String>();
+		List<String> hldMembers = new ArrayList<String>();
+		List<String> prdMembers = new ArrayList<String>();
+		List<String> orderedSclmLevels;
+		
+		//here we get the ordered list of SCLM libs.
+		try {
+			orderedSclmLevels = getOrderedSclmLevels();
+		}
+		catch (DSLoaderException e) {
+			txtProgressLog.append ("DSLoaderException: " + e.getMessage());
+			return;
+		}
+		
+		//we go from down to top and fill in members into appropriate lists
+		try { 
+			fillMemberLists (pattern, wknMembers, wrkMembers, hldMembers, prdMembers, ftpClient, orderedSclmLevels);
+		}
+		catch (Exception e) {
+			e.printStackTrace(System.out);
+			txtProgressLog.append ("fillMemberLists FTPexception: " + e.getMessage() + "\n");
+			return;
+		}
 		
 		try {
-			ftpClient.changeDirectory("'" + txtSclmLevel.getText() + "'");
+			downloadMembers (wknMembers, wrkMembers, hldMembers, prdMembers, ftpClient, orderedSclmLevels);
 		}
 		catch (FTPException e) {
 			e.printStackTrace(System.out);
-			txtProgressLog.append("changeDirectory FTPexception: " + e.getMessage() + "\n");
+			txtProgressLog.append ("Download FTPexception: " + e.getMessage() + "\n");
 			return;
 		}
 		catch (Exception e) {
 			e.printStackTrace(System.out);
-			txtProgressLog.append("changeDirectory Exception: " + e.getMessage() + "\n");
+			txtProgressLog.append ("Download Exception: " + e.getMessage() + "\n");
 			return;
 		}
-		
-		try {
-			ftpClient.download(txtMember.getText(), localFile);
-		}
-		catch (FTPException e) {
-			e.printStackTrace(System.out);
-			txtProgressLog.append("Download FTPexception: " + e.getMessage() + "\n");
-			return;
-		}
-		catch (Exception e) {
-			e.printStackTrace(System.out);
-			txtProgressLog.append("Download Exception: " + e.getMessage() + "\n");
-			return;
-		}
-		
-		
-		txtProgressLog.append("Pulling some data \n");
+		txtProgressLog.append("Success! Pulled all members.");
 	}
 	
 	private void defineBtnBrowse () {
@@ -254,7 +415,6 @@ public class DSLoader {
 						txtProgressLog.append("Exception while disconnecting: " + e.getMessage() + "\n");
 					}
 				}
-				
 			}
 			
 		});
@@ -268,6 +428,19 @@ public class DSLoader {
 		defineBtnPull();
 		
 	}
+
+	public void run () {
+	//		shell.pack(); //Causes the receiver to be resized to its preferred size. 
+			shell.open();
+	
+			while (!shell.isDisposed()) {
+				if (!display.readAndDispatch()) {
+					display.sleep();
+				}
+			}
+			display.dispose();
+			shell.dispose();
+		}
 
 	public static void main (String[] args) {
 		
